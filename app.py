@@ -5,7 +5,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
-from scipy import stats
+from scipy.stats import t
 
 app = Flask(__name__)
 app.secret_key = "your_secret_key_here"  # Replace with your own secret key, needed for session management
@@ -15,7 +15,7 @@ def generate_data(N, mu, beta0, beta1, sigma2, S):
     # Generate data and initial plots
 
     # TODO 1: Generate a random dataset X of size N with values between 0 and 1
-    X = np.random.uniform(0, 1, N)  # Replace with code to generate random values for X
+    X = np.random.rand(N)  # Replace with code to generate random values for X
 
     # TODO 2: Generate a random dataset Y using the specified beta0, beta1, mu, and sigma2
     # Y = beta0 + beta1 * X + mu + error term
@@ -23,11 +23,10 @@ def generate_data(N, mu, beta0, beta1, sigma2, S):
     Y = beta0 + beta1 * X + mu + error # Replace with code to generate Y
 
     # TODO 3: Fit a linear regression model to X and Y
-    X_reshaped = X.reshape(-1, 1)
-    model = LinearRegression()  # Initialize the LinearRegression model
-    model.fit(X_reshaped, Y)  # Fit the model to X and Y
-    slope = model.coef_[0]  # Extract the slope (coefficient) from the fitted model
-    intercept = model.intercept_  # Extract the intercept from the fitted model
+    model = LinearRegression()
+    model.fit(X.reshape(-1, 1), Y)
+    slope = model.coef_[0]
+    intercept = model.intercept_
 
     # TODO 4: Generate a scatter plot of (X, Y) with the fitted regression line
     plot1_path = "static/plot1.png"
@@ -49,17 +48,15 @@ def generate_data(N, mu, beta0, beta1, sigma2, S):
 
     for _ in range(S):
         # TODO 6: Generate simulated datasets using the same beta0 and beta1
-        X_sim = np.random.uniform(0, 1, N)  # Replace with code to generate simulated X values
+        X_sim = np.random.rand(N)  # Replace with code to generate simulated X values
         error_sim = np.random.normal(0, np.sqrt(sigma2), N)
         Y_sim = beta0 + beta1 * X_sim + mu + error_sim # Replace with code to generate simulated Y values
 
         # TODO 7: Fit linear regression to simulated data and store slope and intercept
-        X_sim_reshaped = X_sim.reshape(-1, 1)
-        sim_model = LinearRegression()  # Replace with code to fit the model
-        sim_model.fit(X_sim_reshaped, Y_sim)
-
-        sim_slope = sim_model.coef_[0]  # Extract slope from sim_model
-        sim_intercept = sim_model.intercept_  # Extract intercept from sim_model
+        sim_model = LinearRegression()
+        sim_model.fit(X_sim.reshape(-1, 1), Y_sim)
+        sim_slope = sim_model.coef_[0]
+        sim_intercept = sim_model.intercept_
 
         slopes.append(sim_slope)
         intercepts.append(sim_intercept)
@@ -82,11 +79,9 @@ def generate_data(N, mu, beta0, beta1, sigma2, S):
 
     # TODO 9: Return data needed for further analysis, including slopes and intercepts
     # Calculate proportions of slopes and intercepts more extreme than observed
-    slopes_array = np.array(slopes)
-    intercepts_array = np.array(intercepts)
+    slope_more_extreme = np.mean(np.abs(slopes) >= np.abs(slope))
+    intercept_extreme = np.mean(np.abs(intercepts) >= np.abs(intercept))
 
-    slope_more_extreme = np.mean(np.abs(slopes_array - beta1) >= np.abs(slope - beta1))
-    intercept_extreme = np.mean(np.abs(intercepts_array - beta0) >= np.abs(intercept - beta0))
     # Return data needed for further analysis
     return (
         X,
@@ -192,9 +187,10 @@ def hypothesis_test():
         hypothesized_value = beta0
 
     # TODO 10: Calculate p-value based on test type
-    if test_type == "greater":
+    p_value = None
+    if test_type == ">":
         p_value = np.mean(simulated_stats >= observed_stat)
-    elif test_type == "less":
+    elif test_type == "<":
         p_value = np.mean(simulated_stats <= observed_stat)
     else:
         p_value = np.mean(np.abs(simulated_stats - hypothesized_value) >= np.abs(observed_stat - hypothesized_value))
@@ -251,7 +247,7 @@ def confidence_interval():
     intercepts = session.get("intercepts")
 
     parameter = request.form.get("parameter")
-    confidence_level = float(request.form.get("confidence_level")) / 100
+    confidence_level = float(request.form.get("confidence_level"))
 
     # Use the slopes or intercepts from the simulations
     if parameter == "slope":
@@ -265,13 +261,13 @@ def confidence_interval():
 
     # TODO 14: Calculate mean and standard deviation of the estimates
     mean_estimate = np.mean(estimates)
-    std_estimate = np.std(estimates)
+    std_estimate = np.std(estimates, ddof=1)
 
     # TODO 15: Calculate confidence interval for the parameter estimate
     # Use the t-distribution and confidence_level
-    ci_margin = stats.t.ppf(1 - (1 - confidence_level) / 2, df=S - 1) * (std_estimate / np.sqrt(S))
-    ci_lower = mean_estimate - ci_margin
-    ci_upper = mean_estimate + ci_margin
+    critical_value = t.ppf((1 + confidence_level / 100) / 2, df=S - 1)
+    ci_lower = mean_estimate - critical_value * (std_estimate / np.sqrt(S))
+    ci_upper = mean_estimate + critical_value * (std_estimate / np.sqrt(S))
 
     # TODO 16: Check if confidence interval includes true parameter
     includes_true = ci_lower <= true_param <= ci_upper
@@ -285,10 +281,10 @@ def confidence_interval():
     plt.figure(figsize=(10, 5))
     plt.scatter(range(len(estimates)), estimates, color="gray", alpha=0.5, label="Simulated Estimates")
     plt.axhline(mean_estimate, color="blue", label="Mean Estimate")
-    plt.axhline(ci_lower, color="green", linestyle="--", label=f"{confidence_level*100}% CI Lower")
-    plt.axhline(ci_upper, color="green", linestyle="--", label=f"{confidence_level*100}% CI Upper")
+    plt.axhline(ci_lower, color="green", linestyle="--", label=f"{confidence_level}% CI Lower")
+    plt.axhline(ci_upper, color="green", linestyle="--", label=f"{confidence_level}% CI Upper")
     plt.axhline(true_param, color="red", label="True Parameter")
-    plt.title(f"{confidence_level*100}% Confidence Interval for {parameter.capitalize()}")
+    plt.title(f"{confidence_level}% Confidence Interval for {parameter.capitalize()}")
     plt.xlabel("Simulation Index")
     plt.ylabel("Estimate")
     plt.legend()
